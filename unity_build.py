@@ -55,6 +55,13 @@ def generate(env : Environment):
     env.AddMethod(_make_generator(env.Library), 'UnityLibrary')
     env.AddMethod(_make_generator(env.StaticLibrary), 'UnityStaticLibrary')
     env.AddMethod(_make_generator(env.SharedLibrary), 'UnitySharedLibrary')
+
+    # build for generating the unity source files
+    unity_source_builder = env.Builder(
+        action = Action.Action(_generate_unity_file, _generate_unity_file_msg)
+    )
+    env.Append(BUILDERS = {'UnitySource': unity_source_builder})
+
     env.SetDefault(UNITY_CACHE_DIR = '.unity')
     env.SetDefault(UNITY_MAX_SOURCES = 15)
     env.SetDefault(UNITY_MIN_FILES = env.GetOption('num_jobs'))
@@ -85,7 +92,10 @@ def _make_generator(base_generator):
             unity_source_files.append(unity_filename)
             begin = sources_per_file*idx
             end = sources_per_file*(idx+1)
-            _generate_unity_file(unity_filename, source_files[begin:end])
+            env.UnitySource(
+                target = unity_filename,
+                source = source_files[begin:end]
+            )
         
         if len(other_nodes) > 0:
             print(f'Exluded {len(other_nodes)} node(s) from Unity build.')
@@ -109,10 +119,15 @@ def _flatten_source(source : list):
 
     return source_files, other_nodes
 
-def _generate_unity_file(unity_filename : str, sources : list):
-    print(f'Generating {unity_filename} from {len(sources)} source files.')
+def _generate_unity_file_msg(target, source, env : Environment):
+    assert(len(target) == 1)
+    return f'Generating {str(target[0])} from {len(source)} source files.'
 
+def _generate_unity_file(target, source, env : Environment):
+    assert(len(target) == 1)
+
+    unity_filename = target[0].abspath
     with open(unity_filename, 'w') as f:
-        for source in sources:
-            fpath = os.path.abspath(source).replace("\\", "\\\\")
+        for source_file in source:
+            fpath = source_file.abspath.replace("\\", "\\\\")
             f.write(f'#include "{fpath}"\n')
